@@ -17,6 +17,14 @@ export const AdminStates = {
   EDITING_PRODUCT: 'editing_product'
 };
 
+export const IGNOUStates = {
+  WAITING_ENROLLMENT_ASSIGNMENT: 'waiting_enrollment_assignment',
+  WAITING_ENROLLMENT_GRADE: 'waiting_enrollment_grade',
+  WAITING_ENROLLMENT_MARKS: 'waiting_enrollment_marks',
+  WAITING_PROGRAM_CODE: 'waiting_program_code',
+  PROCESSING_REQUEST: 'processing_request'
+};
+
 export const OrderStatus = {
   PENDING: 'pending',
   APPROVED: 'approved',
@@ -92,7 +100,11 @@ export const Emojis = {
   EDIT: '✏️',
   DELETE: '🗑️',
   LOCK: '🔒',
-  SHIELD: '🛡️'
+  SHIELD: '🛡️',
+  IGNOU: '🎓',
+  ASSIGNMENT: '📋',
+  GRADE: '🎓',
+  MARKS: '📊'
 };
 
 // Admin Access Control Messages
@@ -114,5 +126,48 @@ export const AdminMessages = {
     message: 'You do not have sufficient permissions to perform this action.',
     description: 'Your current user level does not allow access to this administrative function.',
     action: 'Return to Previous Menu'
+  }
+};
+
+// IGNOU Service Messages
+export const IGNOUMessages = {
+  WELCOME: {
+    title: '🎓 IGNOU Services',
+    message: 'Access your IGNOU academic information quickly and easily.',
+    services: [
+      '📋 Assignment Status - Check submission status',
+      '🎓 Grade Card - View semester results with SGPA',
+      '📊 Assignment Marks - Check assignment marks with percentages'
+    ]
+  },
+  ENROLLMENT_PROMPT: {
+    title: 'Enter Enrollment Number',
+    message: 'Please enter your 9-digit IGNOU enrollment number:',
+    example: 'Example: 123456789',
+    validation: 'Make sure to enter the correct enrollment number.'
+  },
+  PROGRAM_PROMPT: {
+    title: 'Enter Programme Code',
+    message: 'Please enter your programme code:',
+    examples: [
+      'BCA - Bachelor of Computer Applications',
+      'MCA - Master of Computer Applications',
+      'BA - Bachelor of Arts',
+      'MA - Master of Arts',
+      'BCOM - Bachelor of Commerce',
+      'MCOM - Master of Commerce'
+    ]
+  },
+  PROCESSING: {
+    title: 'Processing Request',
+    message: 'Fetching your academic information...',
+    note: 'Please wait, this may take a few moments.'
+  },
+  ERROR: {
+    INVALID_ENROLLMENT: 'Invalid enrollment number. Please enter a 9-digit enrollment number.',
+    INVALID_PROGRAM: 'Invalid programme code. Please enter a valid programme code (e.g., BCA, MCA, BA).',
+    SERVICE_UNAVAILABLE: 'Service temporarily unavailable. Please try again later.',
+    DATA_NOT_FOUND: 'No data found for the provided enrollment number and programme code.',
+    NETWORK_ERROR: 'Network error occurred. Please check your connection and try again.'
   }
 };
