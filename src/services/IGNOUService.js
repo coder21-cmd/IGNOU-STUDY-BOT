@@ -14,146 +14,91 @@ class IGNOUService {
     try {
       console.log(`Checking assignment status for: ${enrollmentNumber}, Program: ${programCode}`);
       
-      // Try multiple request methods
-      const methods = [
-        () => this.makeAssignmentRequest(enrollmentNumber, programCode, 'POST'),
-        () => this.makeAssignmentRequest(enrollmentNumber, programCode, 'GET')
-      ];
+      // The IGNOU website uses a specific form submission format
+      const formData = new URLSearchParams();
+      formData.append('eno', enrollmentNumber);
+      formData.append('prog', programCode.toUpperCase());
+      formData.append('submit', 'Submit');
 
-      for (const method of methods) {
-        try {
-          const result = await method();
-          if (result.success) {
-            return result;
-          }
-        } catch (error) {
-          console.log('Method failed, trying next:', error.message);
-        }
+      const response = await fetch(this.baseUrls.assignmentStatus, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+          'Accept-Language': 'en-US,en;q=0.9',
+          'Accept-Encoding': 'gzip, deflate, br',
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache',
+          'Upgrade-Insecure-Requests': '1',
+          'Sec-Fetch-Dest': 'document',
+          'Sec-Fetch-Mode': 'navigate',
+          'Sec-Fetch-Site': 'same-origin',
+          'Sec-Fetch-User': '?1',
+          'Referer': 'https://isms.ignou.ac.in/changeadmdata/StatusAssignment.asp'
+        },
+        body: formData,
+        timeout: 30000
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
-      // If all methods fail, return a more specific error
-      return { 
-        success: false, 
-        error: 'Unable to fetch assignment status from IGNOU website. The website may be temporarily unavailable or your enrollment/program details may be incorrect.' 
+      const html = await response.text();
+      console.log('Response received, length:', html.length);
+      
+      // Check for error messages in the response
+      const lowerHtml = html.toLowerCase();
+      
+      if (lowerHtml.includes('invalid enrollment') || lowerHtml.includes('enrollment number is invalid')) {
+        return { success: false, error: 'Invalid Enrollment Number' };
+      }
+      
+      if (lowerHtml.includes('invalid programme') || lowerHtml.includes('programme code is invalid')) {
+        return { success: false, error: 'Invalid Programme Code' };
+      }
+      
+      if (lowerHtml.includes('no records found') || lowerHtml.includes('no assignment found')) {
+        return { success: false, error: 'No assignment records found for this enrollment number and programme code' };
+      }
+
+      // Parse the HTML response using the actual IGNOU website structure
+      const assignments = this.parseIGNOUAssignmentStatus(html);
+      
+      if (assignments.length === 0) {
+        return { 
+          success: false, 
+          error: 'No assignment records found. Please verify your enrollment number and programme code are correct.' 
+        };
+      }
+
+      return {
+        success: true,
+        data: {
+          enrollmentNumber,
+          programCode: programCode.toUpperCase(),
+          assignments
+        }
       };
 
     } catch (error) {
       console.error('Error checking assignment status:', error);
       return { 
         success: false, 
-        error: 'Service temporarily unavailable. Please try again later.' 
+        error: 'Unable to fetch assignment status from IGNOU website. Please try again later.' 
       };
     }
   }
 
-  async makeAssignmentRequest(enrollmentNumber, programCode, method = 'POST') {
-    const url = this.baseUrls.assignmentStatus;
-    let response;
-
-    if (method === 'POST') {
-      const formData = new URLSearchParams();
-      formData.append('eno', enrollmentNumber);
-      formData.append('prog', programCode.toUpperCase());
-      formData.append('submit', 'Submit');
-
-      response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-          'Accept-Language': 'en-US,en;q=0.5',
-          'Accept-Encoding': 'gzip, deflate, br',
-          'DNT': '1',
-          'Connection': 'keep-alive',
-          'Upgrade-Insecure-Requests': '1'
-        },
-        body: formData,
-        timeout: 30000
-      });
-    } else {
-      const queryParams = new URLSearchParams({
-        eno: enrollmentNumber,
-        prog: programCode.toUpperCase()
-      });
-      
-      response = await fetch(`${url}?${queryParams}`, {
-        method: 'GET',
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-          'Accept-Language': 'en-US,en;q=0.5'
-        },
-        timeout: 30000
-      });
-    }
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-
-    const html = await response.text();
-    console.log('Response received, length:', html.length);
-    
-    // Check for various error conditions
-    const lowerHtml = html.toLowerCase();
-    
-    if (lowerHtml.includes('invalid enrollment') || lowerHtml.includes('enrollment number is invalid')) {
-      return { success: false, error: 'Invalid Enrollment Number' };
-    }
-    
-    if (lowerHtml.includes('invalid programme') || lowerHtml.includes('programme code is invalid')) {
-      return { success: false, error: 'Invalid Programme Code' };
-    }
-    
-    if (lowerHtml.includes('no records found') || lowerHtml.includes('no assignment found')) {
-      return { success: false, error: 'No assignment records found for this enrollment number and programme code' };
-    }
-    
-    if (lowerHtml.includes('server error') || lowerHtml.includes('internal server error')) {
-      throw new Error('IGNOU server error');
-    }
-
-    // Parse the HTML response
-    const assignments = this.parseAssignmentStatus(html);
-    
-    if (assignments.length === 0) {
-      // Try alternative parsing methods
-      const alternativeAssignments = this.parseAssignmentStatusAlternative(html);
-      if (alternativeAssignments.length === 0) {
-        return { 
-          success: false, 
-          error: 'No assignment records found. Please verify your enrollment number and programme code are correct.' 
-        };
-      }
-      return {
-        success: true,
-        data: {
-          enrollmentNumber,
-          programCode: programCode.toUpperCase(),
-          assignments: alternativeAssignments
-        }
-      };
-    }
-
-    return {
-      success: true,
-      data: {
-        enrollmentNumber,
-        programCode: programCode.toUpperCase(),
-        assignments
-      }
-    };
-  }
-
-  parseAssignmentStatus(html) {
+  parseIGNOUAssignmentStatus(html) {
     const assignments = [];
     
     try {
       const dom = new JSDOM(html);
       const document = dom.window.document;
       
-      // Try multiple table parsing strategies
+      // Look for the specific table structure used by IGNOU
       const tables = document.querySelectorAll('table');
       
       for (const table of tables) {
@@ -162,60 +107,95 @@ class IGNOUService {
         // Skip tables with too few rows
         if (rows.length < 2) continue;
         
-        // Check if this looks like an assignment table
+        // Check if this is the assignment status table
+        let isAssignmentTable = false;
         const headerRow = rows[0];
-        const headerText = headerRow.textContent.toLowerCase();
+        if (headerRow) {
+          const headerText = headerRow.textContent.toLowerCase();
+          if (headerText.includes('name') && headerText.includes('course') && 
+              headerText.includes('session') && headerText.includes('status')) {
+            isAssignmentTable = true;
+          }
+        }
         
-        if (headerText.includes('course') || headerText.includes('assignment') || headerText.includes('status')) {
-          // Parse assignment data
+        if (isAssignmentTable) {
+          // Parse assignment data from rows
           for (let i = 1; i < rows.length; i++) {
-            const cells = rows[i].querySelectorAll('td, th');
+            const cells = rows[i].querySelectorAll('td');
             
-            if (cells.length >= 3) {
+            if (cells.length >= 5) {
               const assignment = {
-                courseCode: this.cleanText(cells[0]?.textContent || ''),
-                courseName: this.cleanText(cells[1]?.textContent || ''),
-                assignmentCode: this.cleanText(cells[2]?.textContent || ''),
-                status: this.cleanText(cells[3]?.textContent || 'N/A'),
-                submissionDate: this.cleanText(cells[4]?.textContent || 'N/A')
+                name: this.cleanText(cells[0]?.textContent || ''),
+                courseCode: this.cleanText(cells[1]?.textContent || ''),
+                session: this.cleanText(cells[2]?.textContent || ''),
+                status: this.cleanText(cells[3]?.textContent || ''),
+                submissionDate: this.cleanText(cells[4]?.textContent || '')
               };
               
               // Only add if we have meaningful data
-              if (assignment.courseCode && assignment.courseCode.length > 1) {
-                assignments.push(assignment);
+              if (assignment.courseCode && assignment.courseCode.length > 2) {
+                assignments.push({
+                  courseCode: assignment.courseCode,
+                  courseName: assignment.name === 'Assignment' ? assignment.courseCode : assignment.name,
+                  assignmentCode: assignment.name,
+                  status: assignment.status,
+                  submissionDate: assignment.submissionDate,
+                  session: assignment.session
+                });
               }
             }
           }
         }
       }
       
+      // If no assignments found with the table method, try alternative parsing
+      if (assignments.length === 0) {
+        return this.parseIGNOUAssignmentStatusAlternative(html);
+      }
+      
     } catch (error) {
-      console.error('Error parsing assignment status:', error);
+      console.error('Error parsing IGNOU assignment status:', error);
     }
     
     return assignments;
   }
 
-  parseAssignmentStatusAlternative(html) {
+  parseIGNOUAssignmentStatusAlternative(html) {
     const assignments = [];
     
     try {
-      // Try regex-based parsing as fallback
-      const coursePattern = /([A-Z]{2,6}\d{1,3})\s*([^<\n\r]+?)(?:Assignment|ASS|assignment)\s*(\d+)?\s*([^<\n\r]*?)(?:Submitted|SUBMITTED|submitted|Evaluated|EVALUATED|evaluated|Pending|PENDING|pending)/gi;
+      // Try to find assignment data using regex patterns based on the actual IGNOU format
+      const dom = new JSDOM(html);
+      const document = dom.window.document;
       
-      let match;
-      while ((match = coursePattern.exec(html)) !== null) {
-        assignments.push({
-          courseCode: this.cleanText(match[1] || ''),
-          courseName: this.cleanText(match[2] || ''),
-          assignmentCode: this.cleanText(match[3] || 'Assignment'),
-          status: this.cleanText(match[4] || 'Unknown'),
-          submissionDate: 'N/A'
-        });
+      // Look for all table cells and try to identify assignment patterns
+      const allCells = document.querySelectorAll('td');
+      
+      for (let i = 0; i < allCells.length - 4; i += 5) {
+        const name = this.cleanText(allCells[i]?.textContent || '');
+        const course = this.cleanText(allCells[i + 1]?.textContent || '');
+        const session = this.cleanText(allCells[i + 2]?.textContent || '');
+        const status = this.cleanText(allCells[i + 3]?.textContent || '');
+        const date = this.cleanText(allCells[i + 4]?.textContent || '');
+        
+        // Check if this looks like assignment data
+        if (course && course.match(/^[A-Z]{2,6}\d{1,3}$/i) && 
+            (name.toLowerCase().includes('assignment') || name === 'Assignment') &&
+            session && status) {
+          
+          assignments.push({
+            courseCode: course,
+            courseName: course,
+            assignmentCode: name,
+            status: status,
+            submissionDate: date,
+            session: session
+          });
+        }
       }
       
     } catch (error) {
-      console.error('Error in alternative parsing:', error);
+      console.error('Error in alternative IGNOU parsing:', error);
     }
     
     return assignments;
@@ -225,106 +205,82 @@ class IGNOUService {
     try {
       console.log(`Fetching grade card for: ${enrollmentNumber}, Program: ${programCode}`);
       
-      // Try multiple URLs
-      const urls = [
-        this.baseUrls.gradeCard,
-        this.baseUrls.alternateGradeCard
-      ];
+      const formData = new URLSearchParams();
+      formData.append('eno', enrollmentNumber);
+      formData.append('prog', programCode.toUpperCase());
+      formData.append('submit', 'Submit');
 
-      for (const url of urls) {
-        try {
-          const result = await this.makeGradeCardRequest(enrollmentNumber, programCode, url);
-          if (result.success) {
-            return result;
-          }
-        } catch (error) {
-          console.log(`Failed with URL ${url}:`, error.message);
-        }
+      const response = await fetch(this.baseUrls.gradeCard, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.9',
+          'Referer': 'https://gradecard.ignou.ac.in/gradecard/'
+        },
+        body: formData,
+        timeout: 30000
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
-      return { 
-        success: false, 
-        error: 'Unable to fetch grade card from IGNOU website. Please try again later.' 
+      const html = await response.text();
+      const lowerHtml = html.toLowerCase();
+      
+      // Check for errors
+      if (lowerHtml.includes('invalid enrollment') || lowerHtml.includes('enrollment number is invalid')) {
+        return { success: false, error: 'Invalid Enrollment Number' };
+      }
+      
+      if (lowerHtml.includes('invalid programme') || lowerHtml.includes('programme code is invalid')) {
+        return { success: false, error: 'Invalid Programme Code' };
+      }
+      
+      if (lowerHtml.includes('no records found') || lowerHtml.includes('no grade card found')) {
+        return { success: false, error: 'No grade card found for this enrollment number and programme code' };
+      }
+
+      const dom = new JSDOM(html);
+      const document = dom.window.document;
+      
+      // Extract student info
+      const studentInfo = this.extractStudentInfo(document);
+      
+      // Extract semester-wise results
+      const semesterResults = this.extractSemesterResults(document);
+      
+      // Extract assignment marks
+      const assignmentMarks = this.extractAssignmentMarks(document);
+
+      // Check if we got any meaningful data
+      if (Object.keys(studentInfo).length === 0 && semesterResults.length === 0 && Object.keys(assignmentMarks).length === 0) {
+        return { 
+          success: false, 
+          error: 'No grade card data found. Please verify your enrollment number and programme code.' 
+        };
+      }
+
+      return {
+        success: true,
+        data: {
+          enrollmentNumber,
+          programCode: programCode.toUpperCase(),
+          studentInfo,
+          semesterResults,
+          assignmentMarks
+        }
       };
 
     } catch (error) {
       console.error('Error fetching grade card:', error);
       return { 
         success: false, 
-        error: 'Service temporarily unavailable. Please try again later.' 
+        error: 'Unable to fetch grade card from IGNOU website. Please try again later.' 
       };
     }
-  }
-
-  async makeGradeCardRequest(enrollmentNumber, programCode, url) {
-    const formData = new URLSearchParams();
-    formData.append('eno', enrollmentNumber);
-    formData.append('prog', programCode.toUpperCase());
-    formData.append('submit', 'Submit');
-
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.5',
-        'Referer': url
-      },
-      body: formData,
-      timeout: 30000
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-
-    const html = await response.text();
-    const lowerHtml = html.toLowerCase();
-    
-    // Check for errors
-    if (lowerHtml.includes('invalid enrollment') || lowerHtml.includes('enrollment number is invalid')) {
-      return { success: false, error: 'Invalid Enrollment Number' };
-    }
-    
-    if (lowerHtml.includes('invalid programme') || lowerHtml.includes('programme code is invalid')) {
-      return { success: false, error: 'Invalid Programme Code' };
-    }
-    
-    if (lowerHtml.includes('no records found') || lowerHtml.includes('no grade card found')) {
-      return { success: false, error: 'No grade card found for this enrollment number and programme code' };
-    }
-
-    const dom = new JSDOM(html);
-    const document = dom.window.document;
-    
-    // Extract student info
-    const studentInfo = this.extractStudentInfo(document);
-    
-    // Extract semester-wise results
-    const semesterResults = this.extractSemesterResults(document);
-    
-    // Extract assignment marks
-    const assignmentMarks = this.extractAssignmentMarks(document);
-
-    // Check if we got any meaningful data
-    if (Object.keys(studentInfo).length === 0 && semesterResults.length === 0 && Object.keys(assignmentMarks).length === 0) {
-      return { 
-        success: false, 
-        error: 'No grade card data found. Please verify your enrollment number and programme code.' 
-      };
-    }
-
-    return {
-      success: true,
-      data: {
-        enrollmentNumber,
-        programCode: programCode.toUpperCase(),
-        studentInfo,
-        semesterResults,
-        assignmentMarks
-      }
-    };
   }
 
   extractStudentInfo(document) {
@@ -503,7 +459,7 @@ class IGNOUService {
 
   cleanText(text) {
     if (!text) return '';
-    return text.replace(/\s+/g, ' ').trim();
+    return text.replace(/\s+/g, ' ').replace(/\n/g, ' ').trim();
   }
 
   parseNumber(text) {
@@ -531,15 +487,13 @@ class IGNOUService {
     
     data.assignments.forEach((assignment, index) => {
       message += `\n${index + 1}. ${assignment.courseCode}\n`;
-      if (assignment.courseName && assignment.courseName !== assignment.courseCode) {
-        message += `   📖 ${assignment.courseName}\n`;
+      if (assignment.session) {
+        message += `   📅 Session: ${assignment.session}\n`;
       }
-      if (assignment.assignmentCode && assignment.assignmentCode !== 'N/A') {
-        message += `   📝 Assignment: ${assignment.assignmentCode}\n`;
-      }
+      message += `   📝 Assignment: ${assignment.assignmentCode}\n`;
       message += `   ✅ Status: ${assignment.status}\n`;
       if (assignment.submissionDate && assignment.submissionDate !== 'N/A') {
-        message += `   📅 Submitted: ${assignment.submissionDate}\n`;
+        message += `   📅 Date: ${assignment.submissionDate}\n`;
       }
     });
     
