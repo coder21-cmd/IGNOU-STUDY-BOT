@@ -124,6 +124,64 @@ class Database {
         details TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (admin_id) REFERENCES users(id)
+      )`,
+
+      // IGNOU Materials table
+      `CREATE TABLE IF NOT EXISTS ignou_materials (
+        id TEXT PRIMARY KEY,
+        material_type TEXT NOT NULL,
+        program_code TEXT NOT NULL,
+        semester INTEGER,
+        subject_code TEXT,
+        subject_name TEXT,
+        session_name TEXT,
+        file_name TEXT NOT NULL,
+        file_id TEXT NOT NULL,
+        message_id INTEGER NOT NULL,
+        file_size INTEGER DEFAULT 0,
+        category_path TEXT,
+        subcategory_path TEXT,
+        is_active BOOLEAN DEFAULT 1,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )`,
+
+      // IGNOU Programs table
+      `CREATE TABLE IF NOT EXISTS ignou_programs (
+        code TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        full_name TEXT NOT NULL,
+        duration_years INTEGER DEFAULT 3,
+        total_semesters INTEGER DEFAULT 6,
+        is_active BOOLEAN DEFAULT 1,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )`,
+
+      // IGNOU Subjects table
+      `CREATE TABLE IF NOT EXISTS ignou_subjects (
+        id TEXT PRIMARY KEY,
+        program_code TEXT NOT NULL,
+        semester INTEGER NOT NULL,
+        subject_code TEXT NOT NULL,
+        subject_name TEXT NOT NULL,
+        credits INTEGER DEFAULT 4,
+        is_active BOOLEAN DEFAULT 1,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (program_code) REFERENCES ignou_programs(code)
+      )`,
+
+      // Material Categories table (for notes and books)
+      `CREATE TABLE IF NOT EXISTS material_categories (
+        id TEXT PRIMARY KEY,
+        material_type TEXT NOT NULL,
+        program_code TEXT NOT NULL,
+        category_name TEXT NOT NULL,
+        parent_category_id TEXT,
+        level INTEGER DEFAULT 0,
+        sort_order INTEGER DEFAULT 0,
+        is_active BOOLEAN DEFAULT 1,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (parent_category_id) REFERENCES material_categories(id)
       )`
     ];
 
@@ -138,11 +196,48 @@ class Database {
       'CREATE INDEX IF NOT EXISTS idx_files_product ON files(product_id)',
       'CREATE INDEX IF NOT EXISTS idx_orders_user ON orders(user_id)',
       'CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status)',
-      'CREATE INDEX IF NOT EXISTS idx_users_telegram ON users(telegram_id)'
+      'CREATE INDEX IF NOT EXISTS idx_users_telegram ON users(telegram_id)',
+      'CREATE INDEX IF NOT EXISTS idx_ignou_materials_program ON ignou_materials(program_code)',
+      'CREATE INDEX IF NOT EXISTS idx_ignou_materials_type ON ignou_materials(material_type)',
+      'CREATE INDEX IF NOT EXISTS idx_ignou_materials_semester ON ignou_materials(semester)',
+      'CREATE INDEX IF NOT EXISTS idx_ignou_materials_subject ON ignou_materials(subject_code)',
+      'CREATE INDEX IF NOT EXISTS idx_ignou_subjects_program ON ignou_subjects(program_code)',
+      'CREATE INDEX IF NOT EXISTS idx_material_categories_type ON material_categories(material_type)',
+      'CREATE INDEX IF NOT EXISTS idx_material_categories_program ON material_categories(program_code)'
     ];
 
     for (const index of indexes) {
       await this.run(index);
+    }
+
+    // Insert default IGNOU programs
+    await this.insertDefaultPrograms();
+  }
+
+  async insertDefaultPrograms() {
+    const programs = [
+      { code: 'BCA', name: 'BCA', full_name: 'Bachelor of Computer Applications', duration_years: 3, total_semesters: 6 },
+      { code: 'MCA', name: 'MCA', full_name: 'Master of Computer Applications', duration_years: 2, total_semesters: 4 },
+      { code: 'BA', name: 'BA', full_name: 'Bachelor of Arts', duration_years: 3, total_semesters: 6 },
+      { code: 'MA', name: 'MA', full_name: 'Master of Arts', duration_years: 2, total_semesters: 4 },
+      { code: 'BCOM', name: 'BCOM', full_name: 'Bachelor of Commerce', duration_years: 3, total_semesters: 6 },
+      { code: 'MCOM', name: 'MCOM', full_name: 'Master of Commerce', duration_years: 2, total_semesters: 4 },
+      { code: 'BSC', name: 'BSC', full_name: 'Bachelor of Science', duration_years: 3, total_semesters: 6 },
+      { code: 'MSC', name: 'MSC', full_name: 'Master of Science', duration_years: 2, total_semesters: 4 }
+    ];
+
+    for (const program of programs) {
+      try {
+        const existing = await this.get('SELECT code FROM ignou_programs WHERE code = ?', [program.code]);
+        if (!existing) {
+          await this.run(
+            'INSERT INTO ignou_programs (code, name, full_name, duration_years, total_semesters) VALUES (?, ?, ?, ?, ?)',
+            [program.code, program.name, program.full_name, program.duration_years, program.total_semesters]
+          );
+        }
+      } catch (error) {
+        console.error(`Error inserting program ${program.code}:`, error);
+      }
     }
   }
 
