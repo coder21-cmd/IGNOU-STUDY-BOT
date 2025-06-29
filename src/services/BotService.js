@@ -4,7 +4,8 @@ import User from '../models/User.js';
 import Category from '../models/Category.js';
 import Product from '../models/Product.js';
 import Order from '../models/Order.js';
-import { BotStates, AdminStates } from '../utils/constants.js';
+import IGNOUService from './IGNOUService.js';
+import { BotStates, AdminStates, IGNOUStates } from '../utils/constants.js';
 import { formatPrice, formatDate, createInlineKeyboard } from '../utils/helpers.js';
 
 class BotService {
@@ -15,6 +16,7 @@ class BotService {
     this.categoryModel = null;
     this.productModel = null;
     this.orderModel = null;
+    this.ignouService = null;
     this.userSessions = new Map();
     this.adminSessions = new Map();
   }
@@ -30,6 +32,7 @@ class BotService {
       this.categoryModel = new Category(this.db);
       this.productModel = new Product(this.db);
       this.orderModel = new Order(this.db);
+      this.ignouService = new IGNOUService();
 
       // Initialize bot
       this.bot = new TelegramBot(process.env.BOT_TOKEN, { polling: true });
@@ -214,6 +217,7 @@ Choose an option below to get started:
       const keyboard = [
         [{ text: '📚 Browse Categories', callback_data: 'browse_categories' }],
         [{ text: '🔍 Search Products', callback_data: 'search_products' }],
+        [{ text: '🎓 IGNOU Services', callback_data: 'ignou_services' }],
         [{ text: '📋 My Orders', callback_data: 'my_orders' }]
       ];
 
@@ -246,6 +250,8 @@ Choose an option below to get started:
         await this.showCategories(chatId, messageId);
       } else if (data === 'search_products') {
         await this.initiateSearch(chatId, messageId);
+      } else if (data === 'ignou_services') {
+        await this.showIGNOUServices(chatId, messageId);
       } else if (data === 'my_orders') {
         await this.showUserOrders(chatId, messageId);
       } else if (data === 'admin_panel') {
@@ -266,6 +272,14 @@ Choose an option below to get started:
         await this.showCategories(chatId, messageId);
       } else if (data === 'back_to_main') {
         await this.handleStart({ chat: { id: chatId }, from: callbackQuery.from });
+      }
+      // IGNOU Services callbacks
+      else if (data === 'ignou_assignment_status') {
+        await this.initiateIGNOUAssignmentStatus(chatId, messageId);
+      } else if (data === 'ignou_grade_card') {
+        await this.initiateIGNOUGradeCard(chatId, messageId);
+      } else if (data === 'ignou_assignment_marks') {
+        await this.initiateIGNOUAssignmentMarks(chatId, messageId);
       }
       // Admin callback handlers
       else if (data === 'admin_categories') {
@@ -301,6 +315,334 @@ Choose an option below to get started:
       console.error('Error in handleCallbackQuery:', error);
       await this.bot.sendMessage(chatId, 'Sorry, something went wrong. Please try again.');
     }
+  }
+
+  // IGNOU Services Methods
+  async showIGNOUServices(chatId, messageId) {
+    const message = `
+🎓 IGNOU Services
+
+Select the service you need:
+
+📋 Assignment Status - Check your assignment submission status
+🎓 Grade Card - View your complete semester results with SGPA
+📊 Assignment Marks - Check semester-wise assignment marks
+
+Choose an option below:
+    `;
+
+    const keyboard = [
+      [{ text: '📋 Assignment Status', callback_data: 'ignou_assignment_status' }],
+      [{ text: '🎓 Grade Card', callback_data: 'ignou_grade_card' }],
+      [{ text: '📊 Assignment Marks', callback_data: 'ignou_assignment_marks' }],
+      [{ text: '🏠 Back to Main Menu', callback_data: 'back_to_main' }]
+    ];
+
+    if (messageId) {
+      await this.bot.editMessageText(message, {
+        chat_id: chatId,
+        message_id: messageId,
+        reply_markup: { inline_keyboard: keyboard }
+      });
+    } else {
+      await this.bot.sendMessage(chatId, message, {
+        reply_markup: { inline_keyboard: keyboard }
+      });
+    }
+  }
+
+  async initiateIGNOUAssignmentStatus(chatId, messageId) {
+    this.userSessions.set(chatId, { 
+      state: IGNOUStates.WAITING_ENROLLMENT_ASSIGNMENT,
+      messageId: messageId,
+      service: 'assignment_status'
+    });
+
+    const message = `
+📋 IGNOU Assignment Status
+
+Please enter your Enrollment Number (9 digits):
+
+Example: 123456789
+
+⚠️ Make sure to enter the correct enrollment number.
+    `;
+
+    await this.bot.editMessageText(message, {
+      chat_id: chatId,
+      message_id: messageId,
+      reply_markup: { 
+        inline_keyboard: [[{ text: '❌ Cancel', callback_data: 'ignou_services' }]]
+      }
+    });
+  }
+
+  async initiateIGNOUGradeCard(chatId, messageId) {
+    this.userSessions.set(chatId, { 
+      state: IGNOUStates.WAITING_ENROLLMENT_GRADE,
+      messageId: messageId,
+      service: 'grade_card'
+    });
+
+    const message = `
+🎓 IGNOU Grade Card
+
+Please enter your Enrollment Number (9 digits):
+
+Example: 123456789
+
+⚠️ Make sure to enter the correct enrollment number.
+    `;
+
+    await this.bot.editMessageText(message, {
+      chat_id: chatId,
+      message_id: messageId,
+      reply_markup: { 
+        inline_keyboard: [[{ text: '❌ Cancel', callback_data: 'ignou_services' }]]
+      }
+    });
+  }
+
+  async initiateIGNOUAssignmentMarks(chatId, messageId) {
+    this.userSessions.set(chatId, { 
+      state: IGNOUStates.WAITING_ENROLLMENT_MARKS,
+      messageId: messageId,
+      service: 'assignment_marks'
+    });
+
+    const message = `
+📊 IGNOU Assignment Marks
+
+Please enter your Enrollment Number (9 digits):
+
+Example: 123456789
+
+⚠️ Make sure to enter the correct enrollment number.
+    `;
+
+    await this.bot.editMessageText(message, {
+      chat_id: chatId,
+      message_id: messageId,
+      reply_markup: { 
+        inline_keyboard: [[{ text: '❌ Cancel', callback_data: 'ignou_services' }]]
+      }
+    });
+  }
+
+  async processIGNOUEnrollment(chatId, enrollmentNumber, service, messageId) {
+    // Validate enrollment number
+    if (!/^\d{9}$/.test(enrollmentNumber)) {
+      await this.bot.editMessageText(
+        '❌ Invalid enrollment number. Please enter a 9-digit enrollment number.',
+        {
+          chat_id: chatId,
+          message_id: messageId,
+          reply_markup: { 
+            inline_keyboard: [[{ text: '🔄 Try Again', callback_data: `ignou_${service}` }]]
+          }
+        }
+      );
+      return;
+    }
+
+    // Update session to wait for program code
+    this.userSessions.set(chatId, { 
+      state: IGNOUStates.WAITING_PROGRAM_CODE,
+      messageId: messageId,
+      service: service,
+      enrollmentNumber: enrollmentNumber
+    });
+
+    const message = `
+✅ Enrollment Number: ${enrollmentNumber}
+
+Now please enter your Programme Code:
+
+Examples:
+• BCA - Bachelor of Computer Applications
+• MCA - Master of Computer Applications
+• BA - Bachelor of Arts
+• MA - Master of Arts
+• BCOM - Bachelor of Commerce
+• MCOM - Master of Commerce
+
+Enter your programme code:
+    `;
+
+    await this.bot.editMessageText(message, {
+      chat_id: chatId,
+      message_id: messageId,
+      reply_markup: { 
+        inline_keyboard: [[{ text: '❌ Cancel', callback_data: 'ignou_services' }]]
+      }
+    });
+  }
+
+  async processIGNOUProgramCode(chatId, programCode, session) {
+    // Validate program code
+    if (!/^[A-Za-z]{2,10}$/.test(programCode)) {
+      await this.bot.editMessageText(
+        '❌ Invalid programme code. Please enter a valid programme code (e.g., BCA, MCA, BA).',
+        {
+          chat_id: chatId,
+          message_id: session.messageId,
+          reply_markup: { 
+            inline_keyboard: [[{ text: '🔄 Try Again', callback_data: `ignou_${session.service}` }]]
+          }
+        }
+      );
+      return;
+    }
+
+    // Show loading message
+    await this.bot.editMessageText(
+      `⏳ Fetching your ${session.service.replace('_', ' ')} data...\n\nPlease wait, this may take a few moments.`,
+      {
+        chat_id: chatId,
+        message_id: session.messageId
+      }
+    );
+
+    try {
+      let result;
+      
+      switch (session.service) {
+        case 'assignment_status':
+          result = await this.ignouService.checkAssignmentStatus(session.enrollmentNumber, programCode);
+          break;
+        case 'grade_card':
+          result = await this.ignouService.getGradeCard(session.enrollmentNumber, programCode);
+          break;
+        case 'assignment_marks':
+          result = await this.ignouService.getGradeCard(session.enrollmentNumber, programCode);
+          break;
+      }
+
+      if (result.success) {
+        let formattedMessage;
+        
+        switch (session.service) {
+          case 'assignment_status':
+            formattedMessage = this.ignouService.formatAssignmentStatus(result.data);
+            break;
+          case 'grade_card':
+            formattedMessage = this.ignouService.formatGradeCard(result.data);
+            break;
+          case 'assignment_marks':
+            formattedMessage = this.ignouService.formatAssignmentMarks(result.data);
+            break;
+        }
+
+        // Split message if too long
+        if (formattedMessage.length > 4000) {
+          const chunks = this.splitMessage(formattedMessage, 4000);
+          for (let i = 0; i < chunks.length; i++) {
+            if (i === 0) {
+              await this.bot.editMessageText(chunks[i], {
+                chat_id: chatId,
+                message_id: session.messageId
+              });
+            } else {
+              await this.bot.sendMessage(chatId, chunks[i]);
+            }
+          }
+        } else {
+          await this.bot.editMessageText(formattedMessage, {
+            chat_id: chatId,
+            message_id: session.messageId
+          });
+        }
+
+        // Send back to IGNOU services menu
+        await this.bot.sendMessage(chatId, 'Would you like to check another service?', {
+          reply_markup: { 
+            inline_keyboard: [
+              [{ text: '🎓 IGNOU Services', callback_data: 'ignou_services' }],
+              [{ text: '🏠 Main Menu', callback_data: 'back_to_main' }]
+            ]
+          }
+        });
+
+      } else {
+        await this.bot.editMessageText(
+          `❌ Error: ${result.error}\n\nPlease check your enrollment number and programme code.`,
+          {
+            chat_id: chatId,
+            message_id: session.messageId,
+            reply_markup: { 
+              inline_keyboard: [
+                [{ text: '🔄 Try Again', callback_data: `ignou_${session.service}` }],
+                [{ text: '🎓 IGNOU Services', callback_data: 'ignou_services' }]
+              ]
+            }
+          }
+        );
+      }
+
+    } catch (error) {
+      console.error('Error processing IGNOU request:', error);
+      await this.bot.editMessageText(
+        '❌ Service temporarily unavailable. Please try again later.',
+        {
+          chat_id: chatId,
+          message_id: session.messageId,
+          reply_markup: { 
+            inline_keyboard: [
+              [{ text: '🔄 Try Again', callback_data: `ignou_${session.service}` }],
+              [{ text: '🎓 IGNOU Services', callback_data: 'ignou_services' }]
+            ]
+          }
+        }
+      );
+    }
+
+    // Clear session
+    this.userSessions.delete(chatId);
+  }
+
+  splitMessage(message, maxLength) {
+    const chunks = [];
+    let currentChunk = '';
+    const lines = message.split('\n');
+
+    for (const line of lines) {
+      if ((currentChunk + line + '\n').length > maxLength) {
+        if (currentChunk) {
+          chunks.push(currentChunk.trim());
+          currentChunk = '';
+        }
+        
+        if (line.length > maxLength) {
+          // Split very long lines
+          const words = line.split(' ');
+          let currentLine = '';
+          for (const word of words) {
+            if ((currentLine + word + ' ').length > maxLength) {
+              if (currentLine) {
+                chunks.push(currentLine.trim());
+                currentLine = '';
+              }
+              currentLine = word + ' ';
+            } else {
+              currentLine += word + ' ';
+            }
+          }
+          if (currentLine) {
+            currentChunk = currentLine + '\n';
+          }
+        } else {
+          currentChunk = line + '\n';
+        }
+      } else {
+        currentChunk += line + '\n';
+      }
+    }
+
+    if (currentChunk) {
+      chunks.push(currentChunk.trim());
+    }
+
+    return chunks;
   }
 
   async showCategories(chatId, messageId = null) {
@@ -1146,6 +1488,19 @@ Please send the subcategory name:
     const text = msg.text;
     const session = this.userSessions.get(chatId);
     const adminSession = this.adminSessions.get(chatId);
+
+    // Handle IGNOU service inputs
+    if (session) {
+      if (session.state === IGNOUStates.WAITING_ENROLLMENT_ASSIGNMENT ||
+          session.state === IGNOUStates.WAITING_ENROLLMENT_GRADE ||
+          session.state === IGNOUStates.WAITING_ENROLLMENT_MARKS) {
+        await this.processIGNOUEnrollment(chatId, text.trim(), session.service, session.messageId);
+        return;
+      } else if (session.state === IGNOUStates.WAITING_PROGRAM_CODE) {
+        await this.processIGNOUProgramCode(chatId, text.trim().toUpperCase(), session);
+        return;
+      }
+    }
 
     // Handle admin category creation
     if (adminSession && adminSession.state === AdminStates.CREATING_CATEGORY) {
